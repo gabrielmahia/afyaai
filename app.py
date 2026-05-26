@@ -21,7 +21,8 @@ def get_gemini_key():
         return None
 
 def gemini(prompt: str, key: str, max_tokens: int = 1200) -> str:
-    """Call Gemini — returns a graceful fallback string, never raises."""
+    """Call Gemini — returns graceful fallback on any error, never raises."""
+    import ssl, urllib.error
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     prompt = prompt[:5000]
     body = {"contents": [{"parts": [{"text": prompt}]}],
@@ -30,18 +31,19 @@ def gemini(prompt: str, key: str, max_tokens: int = 1200) -> str:
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"})
     try:
-        ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=25, context=ctx) as r:
+        with urllib.request.urlopen(req, timeout=25,
+                                     context=ssl.create_default_context()) as r:
             d = json.loads(r.read())
         candidates = d.get("candidates", [])
         if not candidates:
-            return "_No response generated. Try again._"
+            return "_No response. Try again._"
         return candidates[0]["content"]["parts"][0]["text"]
     except urllib.error.HTTPError as e:
         try:
             detail = e.read().decode("utf-8", errors="replace")[:200]
         except Exception:
             detail = str(e)
-        return f"_AI temporarily unavailable (HTTP {e.code}). {detail}_"
+        return f"_AI unavailable (HTTP {e.code}): {detail}_"
     except Exception as e:
-        return f"_AI call failed: {type(e).__name__}. Check GOOGLE_API_KEY in Streamlit secrets._"
+        return f"_AI error: {type(e).__name__}. Check GOOGLE_API_KEY._"
+
